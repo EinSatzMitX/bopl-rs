@@ -1,4 +1,5 @@
-use std::process::Command;
+use clap::{ArgAction, Parser, arg};
+use std::{fs, process::Command};
 
 use winit::{
     application::ApplicationHandler,
@@ -7,6 +8,14 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /* Theoretically, when this becomes GUI only, the required can be set to false */
+    #[arg(short = 'i', long = "input", action =ArgAction::Set, required=true)]
+    file_path: String,
+}
 
 #[derive(Debug)]
 struct DEField<'a> {
@@ -120,17 +129,23 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
-    let event_loop = EventLoop::new().unwrap();
+    let args = Args::parse();
+    let contents = fs::read_to_string(args.file_path.clone()).unwrap();
+    let de = DesktopEntry::from_str(&contents);
 
-    event_loop.set_control_flow(ControlFlow::Wait);
+    println!("{:?}", de);
 
-    let output = Command::new("yazi")
-        // .arg("")
-        .output()
-        .expect("Failed to execute command");
-
-    let mut app = App::default();
-    let _ = event_loop.run_app(&mut app);
+    // let output = Command::new("yazi")
+    //     // .arg("")
+    //     .output()
+    //     .expect("Failed to execute command");
+    //
+    // let event_loop = EventLoop::new().unwrap();
+    //
+    // event_loop.set_control_flow(ControlFlow::Wait);
+    //
+    // let mut app = App::default();
+    // let _ = event_loop.run_app(&mut app);
 }
 
 #[cfg(test)]

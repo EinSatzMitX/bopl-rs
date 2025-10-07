@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 winit = "0.30.12"
 raw-window-handle = "0.6.2"
+clap = {version="4.5.48", features = [ "derive"]}
