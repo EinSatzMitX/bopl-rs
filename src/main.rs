@@ -1,9 +1,9 @@
 use clap::{ArgAction, Parser, arg};
+use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
 use std::{fs, process::Command};
 
 use winit::{
     application::ApplicationHandler,
-    // dpi::LogicalSize,
     event::WindowEvent,
     event_loop::{ControlFlow, EventLoop},
     window::Window,
@@ -128,12 +128,44 @@ impl ApplicationHandler for App {
     }
 }
 
+fn fuzzy_filter<'a>(items: &'a [&'a str], query: &str) -> Vec<(&'a str, i64)> {
+    let matcher = SkimMatcherV2::default();
+    let mut results: Vec<(&'a str, i64)> = items
+        .iter()
+        .filter_map(|item| {
+            /* fuzzy_match returns Option<i64> score (higher = better) */
+            matcher.fuzzy_match(item, query).map(|score| (*item, score))
+        })
+        .collect();
+
+    /* sort descending by score */
+    results.sort_by(|a, b| b.1.cmp(&a.1));
+    results
+}
+
 fn main() {
     let args = Args::parse();
     let contents = fs::read_to_string(args.file_path.clone()).unwrap();
     let de = DesktopEntry::from_str(&contents);
 
     println!("{:?}", de);
+    let items = vec![
+        "open_file".to_string(),
+        "close_window".to_string(),
+        "hello_triangle".to_string(),
+        "render_frame".to_string(),
+        "load_texture".to_string(),
+        "reload_config".to_string(),
+    ];
+
+    let refs: Vec<&str> = items.iter().map(String::as_str).collect();
+
+    let query = "rder";
+    let matches = fuzzy_filter(&refs, query);
+
+    for (item, score) in matches {
+        println!("{:>4}  {}", score, item);
+    }
 
     // let output = Command::new("yazi")
     //     // .arg("")
