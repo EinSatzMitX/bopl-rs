@@ -1,19 +1,21 @@
 use clap::{ArgAction, Parser, arg};
+use crossterm::{event, terminal};
 use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
-use std::{fs, process::Command};
+use ratatui::{DefaultTerminal, Frame};
+use std::{fs, io, process::Command};
 
-use winit::{
-    application::ApplicationHandler,
-    event::WindowEvent,
-    event_loop::{ControlFlow, EventLoop},
-    window::Window,
-};
+// use winit::{
+//     application::ApplicationHandler,
+//     event::WindowEvent,
+//     event_loop::{ControlFlow, EventLoop},
+//     window::Window,
+// };
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     /* Theoretically, when this becomes GUI only, the required can be set to false */
-    #[arg(short = 'i', long = "input", action =ArgAction::Set, required=true)]
+    #[arg(short = 'i', long = "input", action =ArgAction::Set/* , required=false */)]
     file_path: String,
 }
 
@@ -93,41 +95,6 @@ impl<'a> DesktopEntry<'a> {
     }
 }
 
-#[derive(Default)]
-struct App {
-    window: Option<Window>,
-}
-
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        self.window = Some(
-            event_loop
-                .create_window(Window::default_attributes())
-                .unwrap(),
-        );
-    }
-
-    fn window_event(
-        &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
-        window_id: winit::window::WindowId,
-        event: winit::event::WindowEvent,
-    ) {
-        match event {
-            WindowEvent::CloseRequested => {
-                println!("Close requested; stopping...");
-                event_loop.exit();
-            }
-            WindowEvent::RedrawRequested => {
-                // Redraw the application
-
-                self.window.as_ref().unwrap().request_redraw();
-            }
-            _ => (),
-        }
-    }
-}
-
 fn fuzzy_filter<'a>(items: &'a [&'a str], query: &str) -> Vec<(&'a str, i64)> {
     let matcher = SkimMatcherV2::default();
     let mut results: Vec<(&'a str, i64)> = items
@@ -143,41 +110,58 @@ fn fuzzy_filter<'a>(items: &'a [&'a str], query: &str) -> Vec<(&'a str, i64)> {
     results
 }
 
-fn main() {
-    let args = Args::parse();
-    let contents = fs::read_to_string(args.file_path.clone()).unwrap();
-    let de = DesktopEntry::from_str(&contents);
+#[derive(Debug, Default)]
+struct App {
+    counter: u8,
+    exit: bool,
+}
 
-    println!("{:?}", de);
-    let items = vec![
-        "open_file".to_string(),
-        "close_window".to_string(),
-        "hello_triangle".to_string(),
-        "render_frame".to_string(),
-        "load_texture".to_string(),
-        "reload_config".to_string(),
-    ];
-
-    let refs: Vec<&str> = items.iter().map(String::as_str).collect();
-
-    let query = "rder";
-    let matches = fuzzy_filter(&refs, query);
-
-    for (item, score) in matches {
-        println!("{:>4}  {}", score, item);
+impl App {
+    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+        while !self.exit {
+            terminal.draw(|frame| self.draw(frame))?;
+            self.handle_events()?;
+        }
+        Ok(())
     }
+
+    fn draw(&self, frame: &mut Frame) {
+        todo!()
+    }
+    fn handle_events(&mut self) -> io::Result<()> {
+        todo!()
+    }
+}
+
+fn run(mut terminal: DefaultTerminal) -> Result<()> {
+    loop {
+        terminal.draw(render)?;
+        if matches!(event::read()?, event::Event::Key(_)) {
+            break Ok(());
+        }
+    }
+}
+
+fn render(frame: &mut Frame) {
+    frame.render_widget("Hello, World!", frame.area());
+}
+
+fn main() -> std::io::Result<()> {
+    // let args = Args::parse();
+    // let contents = fs::read_to_string(args.file_path.clone()).unwrap();
+    // let de = DesktopEntry::from_str(&contents);
+
+    let terminal = ratatui::init();
+
+    let result = App::default().run(terminal);
+
+    ratatui::restore();
+    result
 
     // let output = Command::new("yazi")
     //     // .arg("")
     //     .output()
     //     .expect("Failed to execute command");
-    //
-    // let event_loop = EventLoop::new().unwrap();
-    //
-    // event_loop.set_control_flow(ControlFlow::Wait);
-    //
-    // let mut app = App::default();
-    // let _ = event_loop.run_app(&mut app);
 }
 
 #[cfg(test)]

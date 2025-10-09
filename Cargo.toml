@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-winit = "0.30.12"
-raw-window-handle = "0.6.2"
+# winit = "0.30.12"
+# raw-window-handle = "0.6.2"
 clap = {version="4.5.48", features = [ "derive"]}
 fuzzy-matcher = "0.3.7"
-
+ratatui = { version = "0.29.0", features = ["all-widgets", "serde"] }
+crossterm = "0.29.0"
