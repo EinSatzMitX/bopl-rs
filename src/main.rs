@@ -1,7 +1,18 @@
 use clap::{ArgAction, Parser, arg};
-use crossterm::{event, terminal};
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+    terminal,
+};
 use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
-use ratatui::{DefaultTerminal, Frame};
+use ratatui::{
+    DefaultTerminal, Frame,
+    buffer::Buffer,
+    layout::Rect,
+    style::Stylize,
+    symbols::border,
+    text::{Line, Text},
+    widgets::{Block, Paragraph, Widget},
+};
 use std::{fs, io, process::Command};
 
 // use winit::{
@@ -126,14 +137,68 @@ impl App {
     }
 
     fn draw(&self, frame: &mut Frame) {
-        todo!()
+        frame.render_widget(self, frame.area());
     }
     fn handle_events(&mut self) -> io::Result<()> {
-        todo!()
+        match event::read()? {
+            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+                self.handle_key_event(key_event)
+            }
+            _ => {}
+        };
+        Ok(())
+    }
+
+    fn handle_key_event(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Char('q') => self.exit(),
+            KeyCode::Left => self.decrement_counter(),
+            KeyCode::Right => self.increment_counter(),
+            _ => {}
+        }
+    }
+
+    fn exit(&mut self) {
+        self.exit = true;
+    }
+
+    fn increment_counter(&mut self) {
+        self.counter += 1;
+    }
+
+    fn decrement_counter(&mut self) {
+        self.counter -= 1;
     }
 }
 
-fn run(mut terminal: DefaultTerminal) -> Result<()> {
+impl Widget for &App {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let title = Line::from(" Counter App ".bold());
+        let instructions = Line::from(vec![
+            " Decrement ".into(),
+            "<Left>".into(),
+            " Increment ".into(),
+            "<Right>".into(),
+            " Quit ".into(),
+            "<Q>".into(),
+        ]);
+        let block = Block::bordered()
+            .title(title.centered())
+            .title_bottom(instructions.centered())
+            .border_set(border::THICK);
+        let counter_text = Text::from(vec![Line::from(vec![
+            "Value: ".into(),
+            self.counter.to_string().yellow(),
+        ])]);
+
+        Paragraph::new(counter_text)
+            .centered()
+            .block(block)
+            .render(area, buf);
+    }
+}
+
+fn run(mut terminal: DefaultTerminal) -> io::Result<()> {
     loop {
         terminal.draw(render)?;
         if matches!(event::read()?, event::Event::Key(_)) {
@@ -151,9 +216,9 @@ fn main() -> std::io::Result<()> {
     // let contents = fs::read_to_string(args.file_path.clone()).unwrap();
     // let de = DesktopEntry::from_str(&contents);
 
-    let terminal = ratatui::init();
+    let mut terminal = ratatui::init();
 
-    let result = App::default().run(terminal);
+    let result = App::default().run(&mut terminal);
 
     ratatui::restore();
     result
@@ -166,7 +231,14 @@ fn main() -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::DesktopEntry;
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        style::{Style, Stylize},
+        widgets::Widget,
+    };
+
+    use crate::{App, DesktopEntry};
 
     #[test]
     fn parse_test() {
@@ -184,5 +256,29 @@ Hidden=true
 
         let de = DesktopEntry::from_str(sample);
         println!("{:?}", de);
+    }
+
+    fn render_test() {
+        let app = App::default();
+        let mut buf = Buffer::empty(Rect::new(0, 0, 50, 4));
+
+        app.render(buf.area, &mut buf);
+
+        let mut expected = Buffer::with_lines(vec![
+            "┏━━━━━━━━━━━━━ Counter App Tutorial ━━━━━━━━━━━━━┓",
+            "┃                    Value: 0                    ┃",
+            "┃                                                ┃",
+            "┗━ Decrement <Left> Increment <Right> Quit <Q> ━━┛",
+        ]);
+        let title_style = Style::new().bold();
+        let counter_style = Style::new().yellow();
+        let key_style = Style::new().blue().bold();
+        expected.set_style(Rect::new(14, 0, 22, 1), title_style);
+        expected.set_style(Rect::new(28, 1, 1, 1), counter_style);
+        expected.set_style(Rect::new(13, 3, 6, 1), key_style);
+        expected.set_style(Rect::new(30, 3, 7, 1), key_style);
+        expected.set_style(Rect::new(43, 3, 4, 1), key_style);
+
+        assert_eq!(buf, expected);
     }
 }
