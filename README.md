@@ -5,5 +5,4 @@
 ## TODO
 
 - [ ] (WIP) Fuzzy-find keywords and list applications
-- [ ] Make a rough GUI (Maybe TUI?)
-- [ ] Add animations and GPU rendering using wgpu?
+- [ ] Complete Desktop parser (Complete desktop file struct using Options)
