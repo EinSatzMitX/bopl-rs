@@ -7,11 +7,11 @@ use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::Stylize,
     symbols::border,
     text::{Line, Text},
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Block, Borders, Paragraph, Widget},
 };
 use std::{fs, io, process::Command};
 
@@ -123,7 +123,6 @@ fn fuzzy_filter<'a>(items: &'a [&'a str], query: &str) -> Vec<(&'a str, i64)> {
 
 #[derive(Debug, Default)]
 struct App {
-    counter: u8,
     exit: bool,
 }
 
@@ -152,8 +151,6 @@ impl App {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
-            KeyCode::Left => self.decrement_counter(),
-            KeyCode::Right => self.increment_counter(),
             _ => {}
         }
     }
@@ -161,40 +158,42 @@ impl App {
     fn exit(&mut self) {
         self.exit = true;
     }
-
-    fn increment_counter(&mut self) {
-        self.counter += 1;
-    }
-
-    fn decrement_counter(&mut self) {
-        self.counter -= 1;
-    }
 }
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from(" Counter App ".bold());
-        let instructions = Line::from(vec![
-            " Decrement ".into(),
-            "<Left>".into(),
-            " Increment ".into(),
-            "<Right>".into(),
-            " Quit ".into(),
-            "<Q>".into(),
-        ]);
-        let block = Block::bordered()
-            .title(title.centered())
-            .title_bottom(instructions.centered())
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .split(area);
+        let name_title = Line::from(" Programs ".bold());
+        // let instructions = Line::from(vec![" Quit ".into(), "<Q>".into()]);
+        let name_block = Block::bordered()
+            .title(name_title.centered())
+            // .title_bottom(instructions.centered())
             .border_set(border::THICK);
-        let counter_text = Text::from(vec![Line::from(vec![
-            "Value: ".into(),
-            self.counter.to_string().yellow(),
+
+        let program_list = Text::from(vec![Line::from(vec![
+            "Some program 1 ".into(),
+            // self.counter.to_string().yellow(),
         ])]);
 
-        Paragraph::new(counter_text)
+        let desc_title = Line::from(" Description ".bold());
+        let desc_block = Block::default()
+            .title(desc_title.centered())
+            .borders(Borders::ALL)
+            .border_set(border::THICK);
+
+        let desc = Text::from(vec![Line::from(vec![" Description text ".into()])]);
+
+        Paragraph::new(program_list)
             .centered()
-            .block(block)
-            .render(area, buf);
+            .block(name_block)
+            .render(chunks[0], buf);
+        Paragraph::new("Description of selected program goes here")
+            .centered()
+            .block(desc_block)
+            .render(chunks[1], buf);
     }
 }
 
