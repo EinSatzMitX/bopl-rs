@@ -106,24 +106,33 @@ impl<'a> DesktopEntry<'a> {
     }
 }
 
-fn fuzzy_filter<'a>(items: &'a [&'a str], query: &str) -> Vec<(&'a str, i64)> {
-    let matcher = SkimMatcherV2::default();
-    let mut results: Vec<(&'a str, i64)> = items
-        .iter()
-        .filter_map(|item| {
-            /* fuzzy_match returns Option<i64> score (higher = better) */
-            matcher.fuzzy_match(item, query).map(|score| (*item, score))
-        })
-        .collect();
-
-    /* sort descending by score */
-    results.sort_by(|a, b| b.1.cmp(&a.1));
-    results
+// fn fuzzy_filter<'a>(items: &'a [&'a str], query: &str) -> Vec<(&'a str, i64)> {
+//     let matcher = SkimMatcherV2::default();
+//     let mut results: Vec<(&'a str, i64)> = items
+//         .iter()
+//         .filter_map(|item| {
+//             /* fuzzy_match returns Option<i64> score (higher = better) */
+//             matcher.fuzzy_match(item, query).map(|score| (*item, score))
+//         })
+//         .collect();
+//
+//     /* sort descending by score */
+//     results.sort_by(|a, b| b.1.cmp(&a.1));
+//     results
+// }
+#[derive(Debug, Default)]
+enum AppMode {
+    Input,
+    #[default]
+    Normal,
 }
 
 #[derive(Debug, Default)]
 struct App {
+    current_search: Option<String>,
+    matches: Vec<(String, i64)>,
     exit: bool,
+    mode: AppMode,
 }
 
 impl App {
@@ -141,16 +150,60 @@ impl App {
     fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
+                self.handle_key_event_mode(key_event)
             }
             _ => {}
         };
         Ok(())
     }
+    fn handle_key_event_mode(&mut self, key_event: KeyEvent) {
+        match self.mode {
+            AppMode::Normal => self.handle_normal_key_event(key_event),
+            AppMode::Input => self.handle_input_key_event(key_event),
+        }
+    }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
+    fn handle_normal_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
+            KeyCode::Char('/') => {
+                self.mode = AppMode::Input;
+            }
+            // KeyCode::Esc => self.mode = AppMode::Normal,
+            _ => {}
+        }
+    }
+
+    fn handle_input_key_event(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Esc => self.mode = AppMode::Normal,
+
+            // Simple: if there's already a String, push the char; otherwise create one.
+            KeyCode::Char(c) => {
+                if let Some(s) = &mut self.current_search {
+                    s.push(c);
+                } else {
+                    self.current_search = Some(c.to_string());
+                }
+            }
+
+            // We might need to set `current_search` back to None if the last char is removed.
+            // Use `take()` so we can move the String out, mutate it, then put it back (or leave None).
+            KeyCode::Backspace => {
+                match self.current_search.take() {
+                    None => { /* nothing to do */ }
+                    Some(mut s) => {
+                        if s.len() > 1 {
+                            s.pop();
+                            self.current_search = Some(s);
+                        } else {
+                            // last char removed -> set to None
+                            self.current_search = None;
+                        }
+                    }
+                }
+            }
+
             _ => {}
         }
     }
@@ -158,19 +211,57 @@ impl App {
     fn exit(&mut self) {
         self.exit = true;
     }
+
+    fn fuzzy_filter<'a>(items: &'a [&'a str], query: &str) -> Vec<(&'a str, i64)> {
+        let matcher = SkimMatcherV2::default();
+        let mut results: Vec<(&'a str, i64)> = items
+            .iter()
+            .filter_map(|item| {
+                /* fuzzy_match returns Option<i64> score (higher = better) */
+                matcher.fuzzy_match(item, query).map(|score| (*item, score))
+            })
+            .collect();
+
+        /* sort descending by score */
+        results.sort_by(|a, b| b.1.cmp(&a.1));
+        results
+    }
 }
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        // 1) Split the whole area vertically: top = searchbar (fixed height), bottom = main content
+        let outer_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(3), Constraint::Min(0)])
+            .split(area);
+
+        // Top chunk: searchbar (placeholder)
+        let search_title = Line::from(" Search ".bold());
+        let search_block = Block::bordered()
+            .title(search_title.centered())
+            .border_set(border::THICK);
+
+        // placeholder text for search field — no input logic included
+        let search_text = match &self.current_search {
+            None => Text::from(vec![Line::from(" / Type to search... ")]),
+            Some(query) => Text::from(vec![Line::from(query.clone())]),
+        };
+        Paragraph::new(search_text)
+            .centered()
+            .block(search_block)
+            .render(outer_chunks[0], buf);
+
+        // 2) Bottom chunk: split horizontally into two columns (program list / description)
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-            .split(area);
+            .split(outer_chunks[1]);
+
+        // Left block (Programs)
         let name_title = Line::from(" Programs ".bold());
-        // let instructions = Line::from(vec![" Quit ".into(), "<Q>".into()]);
         let name_block = Block::bordered()
             .title(name_title.centered())
-            // .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
         let program_list = Text::from(vec![Line::from(vec![
@@ -178,6 +269,12 @@ impl Widget for &App {
             // self.counter.to_string().yellow(),
         ])]);
 
+        Paragraph::new(program_list)
+            .centered()
+            .block(name_block)
+            .render(chunks[0], buf);
+
+        // Right block (Description)
         let desc_title = Line::from(" Description ".bold());
         let desc_block = Block::default()
             .title(desc_title.centered())
@@ -186,11 +283,7 @@ impl Widget for &App {
 
         let desc = Text::from(vec![Line::from(vec![" Description text ".into()])]);
 
-        Paragraph::new(program_list)
-            .centered()
-            .block(name_block)
-            .render(chunks[0], buf);
-        Paragraph::new("Description of selected program goes here")
+        Paragraph::new(desc)
             .centered()
             .block(desc_block)
             .render(chunks[1], buf);
