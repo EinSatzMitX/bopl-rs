@@ -13,7 +13,7 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, Borders, Paragraph, Widget},
 };
-use std::{fs, io, process::Command};
+use std::{default, fs, io, process::Command};
 
 // use winit::{
 //     application::ApplicationHandler,
@@ -31,7 +31,20 @@ struct Args {
 }
 
 #[derive(Debug)]
+enum DEKey {
+    #[default]
+    UNKOWN,
+    Exec,
+    Name,
+    Icon,
+    Comment,
+    Terminal,
+    // ...
+}
+
+#[derive(Debug)]
 struct DEField<'a> {
+    type: 'a DEKey,
     key: &'a str,
     value: &'a str,
 }
@@ -49,7 +62,6 @@ struct DesktopEntry<'a> {
 
 impl<'a> DesktopEntry<'a> {
     fn from_str(contents: &'a str) -> DesktopEntry<'a> {
-        // Start parsing here
         let mut groups: Vec<DEGroup<'a>> = Vec::new();
         let mut current_group: Option<DEGroup<'a>> = None;
 
