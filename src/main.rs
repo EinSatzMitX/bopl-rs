@@ -32,19 +32,29 @@ struct Args {
 
 #[derive(Debug)]
 enum DEKey {
-    #[default]
-    UNKOWN,
+    UNKNOWN,
     Exec,
     Name,
     Icon,
     Comment,
     Terminal,
-    // ...
+    TryExec,
+    Type,
+    MimeType,
+    Categories,
+    Keywords,
+    // add more keys as needed
+}
+
+impl Default for DEKey {
+    fn default() -> Self {
+        DEKey::UNKNOWN
+    }
 }
 
 #[derive(Debug)]
 struct DEField<'a> {
-    type: 'a DEKey,
+    r#type: DEKey,
     key: &'a str,
     value: &'a str,
 }
@@ -61,21 +71,20 @@ struct DesktopEntry<'a> {
 }
 
 impl<'a> DesktopEntry<'a> {
-    fn from_str(contents: &'a str) -> DesktopEntry<'a> {
+    pub fn from_str(contents: &'a str) -> DesktopEntry<'a> {
         let mut groups: Vec<DEGroup<'a>> = Vec::new();
         let mut current_group: Option<DEGroup<'a>> = None;
 
         for (line_no, raw_line) in contents.lines().enumerate() {
             let line = raw_line.trim();
 
-            /* Skip empty or commented lines (Even `  # stuff` counts as commented, because of the
-             * tirm function) */
+            // Skip empty or commented lines
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
 
-            /* Group parsing */
-            if line.starts_with('[') && line.ends_with(']') {
+            // Group header like: [Desktop Entry]
+            if line.starts_with('[') && line.ends_with(']') && line.len() >= 2 {
                 if let Some(g) = current_group.take() {
                     groups.push(g);
                 }
@@ -87,18 +96,27 @@ impl<'a> DesktopEntry<'a> {
                 continue;
             }
 
+            // Key=Value lines
             if let Some((k, v)) = line.split_once('=') {
                 let key = k.trim();
                 let value = v.trim();
+                let field_type = DesktopEntry::identify_type(key);
 
                 if let Some(g) = current_group.as_mut() {
-                    g.members.push(DEField { key, value });
+                    g.members.push(DEField {
+                        r#type: field_type,
+                        key,
+                        value,
+                    });
                 } else {
-                    /* Key-value-pair before any groups, I don't know if this is allowed but let's
-                     * handle it anyways */
+                    // key/value before any group — create an anonymous group name = ""
                     current_group = Some(DEGroup {
                         name: "",
-                        members: vec![DEField { key, value }],
+                        members: vec![DEField {
+                            r#type: field_type,
+                            key,
+                            value,
+                        }],
                     });
                 }
             } else {
@@ -106,15 +124,33 @@ impl<'a> DesktopEntry<'a> {
                     "Warning: ignoring malformed line {}: {:?}",
                     line_no + 1,
                     raw_line
-                )
+                );
             }
         }
 
+        // Push last group if present
         if let Some(g) = current_group {
             groups.push(g);
         }
 
         DesktopEntry { groups }
+    }
+
+    /// Simple mapping from key-name to DEKey. Extend this as needed.
+    fn identify_type(key: &str) -> DEKey {
+        match key {
+            "Exec" => DEKey::Exec,
+            "Name" => DEKey::Name,
+            "Icon" => DEKey::Icon,
+            "Comment" => DEKey::Comment,
+            "Terminal" => DEKey::Terminal,
+            "TryExec" => DEKey::TryExec,
+            "Type" => DEKey::Type,
+            "MimeType" => DEKey::MimeType,
+            "Categories" => DEKey::Categories,
+            "Keywords" => DEKey::Keywords,
+            _ => DEKey::UNKNOWN,
+        }
     }
 }
 
@@ -319,6 +355,7 @@ fn main() -> std::io::Result<()> {
     // let args = Args::parse();
     // let contents = fs::read_to_string(args.file_path.clone()).unwrap();
     // let de = DesktopEntry::from_str(&contents);
+    // println!("{:?}", de);
 
     let mut terminal = ratatui::init();
 
